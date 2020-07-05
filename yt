@@ -18,7 +18,7 @@ import lxml.html
 
 cookie_file = os.path.expanduser('~/.local/share/yt.txt')
 page = 'https://www.youtube.com/feed/subscriptions'
-max_items = 30
+max_items = 50
 if len(sys.argv) == 2:
     page = sys.argv[1]
 elif len(sys.argv) == 3:

@@ -56,11 +56,14 @@ class App:
     lines = []
     index = []
     watched = collections.deque()
+    show_watched_items = True
+    cutoff = None
     mpvs = []
     lock = threading.Lock()
     pages = two_way_cycle(
         json.load(open(os.path.expanduser("~/.config/yttw.json")))
     )
+    _lines = []
     page = next(pages)
 
     def load_history(self):
@@ -76,7 +79,7 @@ class App:
                 return part
 
     def get_lines(self):
-        self.lines = [line for cmd in self.page for line in subprocess.run(cmd, capture_output=True).stdout.splitlines()]
+        self._lines = self.lines = [line for cmd in self.page for line in subprocess.run(cmd, capture_output=True).stdout.splitlines()]
         #self.lines = subprocess.run("yt", capture_output=True).stdout.splitlines() + subprocess.run("tw", capture_output=True).stdout.splitlines()
         self.index = [self.get_line_key(line) for line in self.lines]
         if self.index and (self.active is None or self.active not in self.index):
@@ -96,6 +99,18 @@ class App:
         #    lines = lines[max(0, indexes.index(self.active) - int(height/2)):indexes.index(self.active) + int(height/2) - 1]
         #else:
         #    lines = lines[:curses.LINES]
+        self.lines = self._lines
+        if not self.show_watched_items:
+            self.lines = []
+            skip_yt = False
+            for line in self._lines:
+                if self.get_line_key(line) == self.cutoff:
+                    skip_yt = True
+                if b"ytdl" in line and skip_yt:
+                    continue
+                if not self.get_line_key(line) in self.watched:
+                    self.lines.append(line)
+        self.index = [self.get_line_key(line) for line in self.lines]
         for index, line in enumerate(self.lines):
             mode = curses.A_BOLD
             key = self.get_line_key(line)
@@ -184,6 +199,11 @@ class App:
                 _thread.start_new_thread(self.play, ("--ytdl-format=480p",))
             elif key == 108:
                 _thread.start_new_thread(self.play, ("--ytdl-format=22,720p60,720p",))
+            elif key == 104:
+                self.show_watched_items = not self.show_watched_items
+            elif key == 99:
+                self.cutoff = self.active
+                self.previous()
             elif key == 9:
                 self.next_page()
             elif key == 353:
