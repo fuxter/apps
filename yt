@@ -1,0 +1,95 @@
+#! /usr/bin/env python
+
+"""
+cr = 'VISITOR_INFO1_LIVE=8q7Zvc6nlzQ; PREF=f6=400&f5=30030&cvdm=grid&f3=8&f1=50000000&al=en&gl=US; SID=_AYDCWECovjuaaORE7a1zhKUniQw3s-hgP_2Fr812OZjzN-iF4jozvhwlF4ayWmkGogELg.; HSID=ARE8NGIs50sw4VH1l; SSID=AzIhAHhTkALUBvxXo; APISID=Uvp7lIMvJemybGrE/AtaSmZ0LKF8WeQuNA; SAPISID=bcD-BfKByKRvTYbK/AVJKTH1-ht92JvIea; LOGIN_INFO=AFmmF2swRQIhANpN1yF0-XEX3zy2MuOoUmWROjhnWK-RjYUi5WaXC8GnAiBnPe2O8w4bm4G0IsDL1JZHxY9G_cUQ6hQIZxmHU4N3lA:QUQ3MjNmeHNLS1pCUE50YXBzU2t2amdZeEc2WGpzTGU5VktJQ2lpYlB2cHd6eGZ5UUxwbnZfcjZTOWo4VENwRVk3Y2cyRXhmVUhsX1RCblpqUHhmQS1KYjZJYUVCbGJwS1FOUUg1bDJmb0Y1WVdYTHN2S3pkRHNGREVjUnN0QWRQSlZzREFZVVd3VmhtaW5LdGgxMlNBZ2NtdDdnYkhnWE1GcVFZQ1FHV3l4TEpldTVrRVhGWG1r; YSC=9fwxMrSyOd8'
+c = http.cookies.SimpleCookie()
+c.load(cr)
+cd = {k: v.value for k, v in c.items()}
+cj = requests.cookies.cookiejar_from_dict(cd)
+pickle.dump(cj, open(os.path.expanduser('~/.local/share/yt.txt'), 'wb'))
+"""
+
+import json
+import os
+import pickle
+import requests
+import sys
+import lxml.html
+
+cookie_file = os.path.expanduser('~/.local/share/yt.txt')
+page = 'https://www.youtube.com/feed/subscriptions'
+max_items = 30
+if len(sys.argv) == 2:
+    page = sys.argv[1]
+elif len(sys.argv) == 3:
+    max_items = int(sys.argv[1])
+    page = sys.argv[2]
+cj = pickle.load(open(cookie_file, 'rb'))
+s = requests.session()
+s.cookies = cj
+r = s.get(page, timeout=(29, 29))
+
+#d = lxml.html.fromstring(r.content.decode())
+#u = d.xpath('//a[contains(@href, "/user/")]/text()')  # user names
+#if u:
+#    l = max([len(i) for i in u])  # max user name lenght
+#else:
+#    l = 0
+#for v in d.xpath('//*[contains(@class, "yt-shelf-grid-item")]')[:max_items]:
+#    duration = v.xpath('.//span[@class="video-time"]/text()')
+#    if not duration:
+#        duration = v.xpath('.//span[@class="video-time"]/*/text()')
+#    print(
+#        v.xpath('.//a')[2].text.rjust(l) if len(v.xpath('.//a')) > 2 else '',
+#        'ytdl://' + v.xpath('./div')[0].attrib.get('data-context-item-id'),
+#        v.xpath('.//a')[1].text,
+#        str(duration).ljust(11),
+#    )
+
+def content_items(content):
+    items = []
+    if isinstance(content, dict):
+        if 'items' in content:
+            items += content['items']
+        else:
+            for key, value in content.items():
+                items += content_items(value)
+    elif isinstance(content, list):
+        for i in content:
+            items += content_items(i)
+    return items
+
+    #for tab in content['contents']['twoColumnBrowseResultsRenderer']['tabs']:
+    #    if 'content' in tab['tabRenderer']:
+    #        for page in tab['tabRenderer']['content']['sectionListRenderer']['contents']:
+    #            for item in page['itemSectionRenderer']['contents'][0]['shelfRenderer']['content']['gridRenderer']['items']:
+    #                yield item
+
+    #[item for page in 
+    #        content['contents']['twoColumnBrowseResultsRenderer']['tabs'][0]['tabRenderer']['content']['sectionListRenderer']['contents']
+    #        for item in 
+    #        page['itemSectionRenderer']['contents'][0]['shelfRenderer']['content']['gridRenderer']['items']
+    #        ]
+
+items = []
+for line in r.content.decode().split('\n'):
+    #print(line)
+    if line.count('ytInitialData'):
+        content = json.loads(line.split('=', maxsplit=1)[1][:-1].strip())
+        items += content_items(content)
+        break
+
+l = max(len(item['gridVideoRenderer']['shortBylineText']['runs'][0]['text']) for item in items[:max_items]) if items and 'shortBylineText' in items[0]['gridVideoRenderer'] else 0
+
+for item in items[:max_items]:
+    item = item['gridVideoRenderer']
+    #print(json.dumps(item))
+    #sys.exit()
+    print(
+        item['shortBylineText']['runs'][0]['text'].rjust(l) if 'shortBylineText' in item else '',
+        f"ytdl://{item['videoId']}",
+        item['title']['simpleText'],
+        f"[{item['thumbnailOverlays'][0]['thumbnailOverlayTimeStatusRenderer']['text']['simpleText']}]" if 'thumbnailOverlayTimeStatusRenderer' in item['thumbnailOverlays'][0] else f"[{item['thumbnailOverlays'][-1]['thumbnailOverlayNowPlayingRenderer']['text']['runs'][0]['text']}]"
+    )
+
+pickle.dump(s.cookies, open(cookie_file, 'wb'))
