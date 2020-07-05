@@ -169,6 +169,8 @@ class App:
         self.mpvs.remove(key)
         if b"ytdl" in key and key not in self.watched:
             self.watched.appendleft(key)
+        if b"ytdl" in key and not self.show_watched_items:
+            self.previous()
         self.refresh()
 
     def run(self, screen):
