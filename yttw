@@ -1,0 +1,200 @@
+#! /usr/bin/env python
+"""
+A curses app for yt and tw scripts.
+* keysboard controls
+* mpv invokation
+
+"""
+
+
+import collections
+import curses
+import itertools
+import json
+import logging
+import os
+import subprocess
+import time
+import threading
+import _thread
+
+
+#logging.basicConfig(filename="yttw.log", level=logging.DEBUG)
+#logging.debug('startup')
+
+
+WATCHED = os.path.expanduser("~/.local/share/watched.txt")
+
+
+def prev(iterable):
+    return iterable.__prev__()
+
+
+class two_way_cycle(object):
+
+    def __init__(self, iterable):
+        self.items = iterable
+        self.forward = itertools.cycle(iterable)
+        self.backward = itertools.cycle(reversed(list(iterable)))
+
+    def __next__(self):
+        item = next(self.forward)
+        index = self.items.index(item)
+        self.backward = itertools.cycle(reversed(self.items[index:] + self.items[:index]))
+        return item
+
+    def __prev__(self):
+        item = next(self.backward)
+        index = self.items.index(item)
+        self.forward = itertools.cycle(self.items[index+1:] + self.items[:index+1])
+        return item
+
+
+class App:
+    screen = None
+    active = None
+    lines = []
+    index = []
+    watched = collections.deque()
+    mpvs = []
+    lock = threading.Lock()
+    pages = two_way_cycle(
+        json.load(open(os.path.expanduser("~/.config/yttw.json")))
+    )
+    page = next(pages)
+
+    def load_history(self):
+        self.watched.extend(open(WATCHED, "rb").read().split())
+
+    def save_history(self):
+        with open(WATCHED, "wb") as f:
+            f.write(b"\n".join(self.watched))
+
+    def get_line_key(self, line):
+        for part in line.split():
+            if b"twitch" in part or b"ytdl" in part:
+                return part
+
+    def get_lines(self):
+        self.lines = [line for cmd in self.page for line in subprocess.run(cmd, capture_output=True).stdout.splitlines()]
+        #self.lines = subprocess.run("yt", capture_output=True).stdout.splitlines() + subprocess.run("tw", capture_output=True).stdout.splitlines()
+        self.index = [self.get_line_key(line) for line in self.lines]
+        if self.index and (self.active is None or self.active not in self.index):
+            self.active = self.index[0]
+
+    def refresh(self):
+        self.lock.acquire()
+        #self.screen.addstr(55, 0, 'bold', curses.A_BOLD)
+        #self.screen.addstr('nornal', curses.A_NORMAL)
+        #self.screen.addstr('watched', curses.A_COLOR)
+        #self.screen.addstr('reverse', curses.A_REVERSE)
+        self.screen.erase()
+        #lines = self.lines
+        #height = self.screen.getmaxyx()[0]
+        #indexes = [self.get_line_key(line) for line in self.lines]
+        #if self.active in indexes:
+        #    lines = lines[max(0, indexes.index(self.active) - int(height/2)):indexes.index(self.active) + int(height/2) - 1]
+        #else:
+        #    lines = lines[:curses.LINES]
+        for index, line in enumerate(self.lines):
+            mode = curses.A_BOLD
+            key = self.get_line_key(line)
+            if key in self.watched:
+                mode = curses.A_NORMAL
+            if key == self.active:
+                mode = curses.A_REVERSE
+            nudge = "   "
+            if key in self.mpvs:
+                nudge = " █ "
+            self.screen.addstr(index, 0, nudge, mode)
+            self.screen.addstr(line, mode)
+            #self.screen.addstr(line[:self.screen.getmaxyx()[1] - 3], mode)
+        #if not self.fetch_thread.is_alive():
+        #    self.screen.addstr(curses.LINES - 1, 0, 'OH NO!!')
+        self.screen.refresh()
+        self.lock.release()
+
+    def next(self):
+        index = self.index.index(self.active)
+        if not index == len(self.lines) - 1:
+            self.active = self.index[index + 1]
+
+    def previous(self):
+        index = self.index.index(self.active)
+        if not index == 0:
+            self.active = self.index[index - 1]
+
+    def next_page(self):
+        self.page = next(self.pages)
+        self.get_lines()
+
+    def prev_page(self):
+        self.page = prev(self.pages)
+        self.get_lines()
+
+    def fetch(self):
+        while True:
+            self.get_lines()
+            self.refresh()
+            time.sleep(60)
+
+    def history_thread(self):
+        while True:
+            self.save_history()
+            time.sleep(60)
+
+    def play(self, quality=None):
+        key = self.active
+        args = ["mpv", "--no-terminal", key]
+        self.mpvs.append(key)
+        self.refresh()
+        if quality:
+            args.insert(2, quality)
+        subprocess.run(args)
+        self.mpvs.remove(key)
+        if b"ytdl" in key and key not in self.watched:
+            self.watched.appendleft(key)
+        self.refresh()
+
+    def run(self, screen):
+        curses.use_default_colors()
+        curses.curs_set(False)
+        self.load_history()
+        self.screen = screen
+        self.fetch_thread = threading.Thread(target=self.fetch, daemon=True)
+        self.fetch_thread.start()
+        self.refresh()
+        _thread.start_new_thread(self.history_thread, ())
+        while True:
+            key = screen.getch()
+            if key == 113:
+                break
+            elif key == 106:
+                self.next()
+            elif key == 107:
+                self.previous()
+            elif key == 10:
+                _thread.start_new_thread(self.play, ())
+            elif key == 49:
+                pass
+                #_thread.start_new_thread(self.play, ("--ytdl-format=160p",))
+            elif key == 51:
+                _thread.start_new_thread(self.play, ("--ytdl-format=360p",))
+            elif key == 52:
+                _thread.start_new_thread(self.play, ("--ytdl-format=480p",))
+            elif key == 108:
+                _thread.start_new_thread(self.play, ("--ytdl-format=22,720p60,720p",))
+            elif key == 9:
+                self.next_page()
+            elif key == 353:
+                self.prev_page()
+            else:
+                #self.screen.addstr(str(key))
+                #self.screen.refresh()
+                pass
+            self.refresh()
+        self.save_history()
+
+
+if __name__ == "__main__":
+    curses.wrapper(App().run)
