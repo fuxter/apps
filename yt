@@ -18,7 +18,7 @@ import lxml.html
 
 cookie_file = os.path.expanduser('~/.local/share/yt.txt')
 page = 'https://www.youtube.com/feed/subscriptions'
-max_items = 50
+max_items = 60
 if len(sys.argv) == 2:
     page = sys.argv[1]
 elif len(sys.argv) == 3:
@@ -79,9 +79,9 @@ for line in r.content.decode().split('\n'):
         items += content_items(content)
         break
 
-l = max(len(item['gridVideoRenderer']['shortBylineText']['runs'][0]['text']) for item in items[:max_items]) if items and 'shortBylineText' in items[0]['gridVideoRenderer'] else 0
+l = max([len(item['gridVideoRenderer']['shortBylineText']['runs'][0]['text']) for item in items[:max_items] if 'gridVideoRenderer' in item and 'shortBylineText' in item['gridVideoRenderer']] or [0])
 
-for item in items[:max_items]:
+for item in [item for item in items[:max_items] if 'gridVideoRenderer' in item]:
     item = item['gridVideoRenderer']
     #print(json.dumps(item))
     #sys.exit()
