@@ -24,6 +24,7 @@ import _thread
 
 
 WATCHED = os.path.expanduser("~/.local/share/watched.txt")
+FLAGGED = os.path.expanduser("~/.local/share/flagged.txt")
 
 
 def prev(iterable):
@@ -53,25 +54,29 @@ class two_way_cycle(object):
 class App:
     screen = None
     active = None
+    _lines = []
     lines = []
     index = []
     watched = collections.deque()
-    show_watched_items = True
-    cutoff = None
+    flagged = collections.deque(maxlen=100)
+    show_watched_items = False
+    show_flagged_items = False
     mpvs = []
     lock = threading.Lock()
     pages = two_way_cycle(
         json.load(open(os.path.expanduser("~/.config/yttw.json")))
     )
-    _lines = []
     page = next(pages)
 
     def load_history(self):
         self.watched.extend(open(WATCHED, "rb").read().split())
+        self.flagged.extend(open(FLAGGED, "rb").read().split()[:100])
 
     def save_history(self):
         with open(WATCHED, "wb") as f:
             f.write(b"\n".join(self.watched))
+        with open(FLAGGED, "wb") as f:
+            f.write(b"\n".join(self.flagged))
 
     def get_line_key(self, line):
         for part in line.split():
@@ -79,11 +84,19 @@ class App:
                 return part
 
     def get_lines(self):
-        self._lines = self.lines = [line for cmd in self.page for line in subprocess.run(cmd, capture_output=True).stdout.splitlines()]
+        self._lines = [line for cmd in self.page for line in subprocess.run(cmd, capture_output=True).stdout.splitlines()]
         #self.lines = subprocess.run("yt", capture_output=True).stdout.splitlines() + subprocess.run("tw", capture_output=True).stdout.splitlines()
-        self.index = [self.get_line_key(line) for line in self.lines]
         if self.index and (self.active is None or self.active not in self.index):
             self.active = self.index[0]
+        self.filter_lines()
+
+    def filter_lines(self):
+        self.lines = self._lines
+        if not self.show_watched_items:
+            self.lines = [line for line in self.lines if not self.get_line_key(line) in self.watched]
+        if not self.show_flagged_items:
+            self.lines = [line for line in self.lines if not self.get_line_key(line) in self.flagged]
+        self.index = [self.get_line_key(line) for line in self.lines]
 
     def refresh(self):
         self.lock.acquire()
@@ -99,18 +112,6 @@ class App:
         #    lines = lines[max(0, indexes.index(self.active) - int(height/2)):indexes.index(self.active) + int(height/2) - 1]
         #else:
         #    lines = lines[:curses.LINES]
-        self.lines = self._lines
-        if not self.show_watched_items:
-            self.lines = []
-            skip_yt = False
-            for line in self._lines:
-                if self.get_line_key(line) == self.cutoff:
-                    skip_yt = True
-                if b"ytdl" in line and skip_yt:
-                    continue
-                if not self.get_line_key(line) in self.watched:
-                    self.lines.append(line)
-        self.index = [self.get_line_key(line) for line in self.lines]
         for index, line in enumerate(self.lines):
             mode = curses.A_BOLD
             key = self.get_line_key(line)
@@ -118,9 +119,15 @@ class App:
                 mode = curses.A_NORMAL
             if key == self.active:
                 mode = curses.A_REVERSE
-            nudge = "   "
+            nudge = "12 "
             if key in self.mpvs:
-                nudge = " █ "
+                nudge = nudge.replace("2", "█")
+            else:
+                nudge = nudge.replace("2", " ")
+            if key in self.flagged:
+                nudge = nudge.replace("1", "*")
+            else:
+                nudge = nudge.replace("1", " ")
             self.screen.addstr(index, 0, nudge, mode)
             self.screen.addstr(line, mode)
             #self.screen.addstr(line[:self.screen.getmaxyx()[1] - 3], mode)
@@ -129,15 +136,31 @@ class App:
         self.screen.refresh()
         self.lock.release()
 
+    def get_active_index(self):
+        if self.active in self.index:
+            return self.index.index(self.active)
+        else:
+            self.active = self.index[0]
+            return 0
+
     def next(self):
-        index = self.index.index(self.active)
+        index = self.get_active_index()
         if not index == len(self.lines) - 1:
             self.active = self.index[index + 1]
 
     def previous(self):
-        index = self.index.index(self.active)
+        index = self.get_active_index()
         if not index == 0:
             self.active = self.index[index - 1]
+
+    def toggle_flag(self):
+        if self.active in self.flagged:
+            self.flagged.remove(self.active)
+        else:
+            self.flagged.appendleft(self.active)
+        if not self.show_flagged_items:
+            self.previous()
+            self.filter_lines()
 
     def next_page(self):
         self.page = next(self.pages)
@@ -167,10 +190,10 @@ class App:
             args.insert(2, quality)
         subprocess.run(args)
         self.mpvs.remove(key)
-        if b"ytdl" in key and key not in self.watched:
-            self.watched.appendleft(key)
         if b"ytdl" in key and not self.show_watched_items:
             self.previous()
+        if b"ytdl" in key and key not in self.watched:
+            self.watched.appendleft(key)
         self.refresh()
 
     def run(self, screen):
@@ -203,9 +226,12 @@ class App:
                 _thread.start_new_thread(self.play, ("--ytdl-format=22,720p60,720p",))
             elif key == 104:
                 self.show_watched_items = not self.show_watched_items
-            elif key == 99:
-                self.cutoff = self.active
-                self.previous()
+                self.filter_lines()
+            elif key == 70:
+                self.show_flagged_items = not self.show_flagged_items
+                self.filter_lines()
+            elif key == 102:
+                self.toggle_flag()
             elif key == 9:
                 self.next_page()
             elif key == 353:
