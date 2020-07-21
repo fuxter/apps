@@ -191,7 +191,8 @@ class App:
         subprocess.run(args)
         self.mpvs.remove(key)
         if b"ytdl" in key and not self.show_watched_items:
-            self.previous()
+            if key == self.active:
+                self.previous()
         if b"ytdl" in key and key not in self.watched:
             self.watched.appendleft(key)
         self.refresh()
