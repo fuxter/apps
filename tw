@@ -1,0 +1,39 @@
+#! /usr/bin/env python
+
+"""
+"""
+
+import os
+import sys
+import requests
+
+streamer = sys.argv[1] if len(sys.argv) > 1 else None
+s = requests.session()
+h = open(os.path.expanduser('~/.local/share/tw.txt')).read()
+b = [{"operationName":"FollowingLive_CurrentUser","variables":{"limit":50},"extensions":{"persistedQuery":{"version":1,"sha256Hash":"0b540a3707a0603db5e6dccb1483b69890b1126142ded83af6c500fee8d55dc9"}}}]
+if streamer:
+    b = [{"operationName":"FilterableVideoTower_Videos","variables":{"limit":30,"channelOwnerLogin":streamer,"broadcastType":None,"videoSort":"TIME"},"extensions":{"persistedQuery":{"version":1,"sha256Hash":"2023a089fca2860c46dcdeb37b2ab2b60899b52cca1bfa4e720b260216ec2dc6"}}}]
+he = {i.split(':')[0]: i.split(':')[1].strip() for i in h.split('\n') if i}
+r = s.post('https://gql.twitch.tv/gql#origin=twilight', json=b, headers=he, timeout=(29, 29))
+
+if streamer:
+    items = r.json()[0]['data']['user']['videos']['edges']
+else:
+    items = r.json()[0]['data']['currentUser']['followedLiveUsers']['edges']
+
+if streamer:
+    l = 0
+else:
+    l = max([len(i['node']['login']) for i in items])  # max user name lenght
+for i in items:
+    if streamer:
+        video = f"https://www.twitch.tv/videos/{i['node']['id']}"
+        game = i['node']['game']
+        count = f"{i['node']['publishedAt']} {i['node']['viewCount']}"
+        title = ' '.join(i['node']['title'].split())
+    else:
+        video = 'https://www.twitch.tv/' + i['node']['login'].ljust(l)
+        game = i['node']['stream']['game']
+        count = i['node']['stream']['viewersCount']
+        title = ' '.join(i['node']['stream']['title'].split())
+    print(video, f"[{game['name'] if game else None}]", count, title)
