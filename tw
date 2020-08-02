@@ -28,12 +28,14 @@ else:
 for i in items:
     if streamer:
         video = f"https://www.twitch.tv/videos/{i['node']['id']}"
-        game = i['node']['game']
-        count = f"{i['node']['publishedAt']} {i['node']['viewCount']}"
+        game = i['node']['game']['name']
+        datetime = i['node']['publishedAt']
+        count = i['node']['viewCount']
         title = ' '.join(i['node']['title'].split())
+        print(video, datetime, game, count, title)
     else:
         video = 'https://www.twitch.tv/' + i['node']['login'].ljust(l)
         game = i['node']['stream']['game']
         count = i['node']['stream']['viewersCount']
         title = ' '.join(i['node']['stream']['title'].split())
-    print(video, f"[{game['name'] if game else None}]", count, title)
+        print(video, f"[{game['name'] if game else None}]", count, title)
