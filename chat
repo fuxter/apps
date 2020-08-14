@@ -1,0 +1,77 @@
+#!/usr/bin/env python
+
+import asyncio
+import os
+import sys
+import time
+import urllib
+
+sys.path.append(os.path.expanduser("~/.bin"))  # websockets location
+import websockets
+
+from dotenv import load_dotenv
+
+
+load_dotenv()
+TWITCH_USER = os.getenv("TWITCH_USER")
+TWITCH_OAUTH = os.getenv("TWITCH_OAUTH")
+
+channel = sys.argv[1]
+message = ' '.join(sys.argv[2:])
+colors = []
+
+
+def set_color(color):
+    global colors
+    if color not in colors:
+        number = len(colors) + 20
+        print(f'\033]4;{number};{color}\033\\', end='')
+        colors.append(color)
+
+
+async def chat():
+    global message
+    uri = "wss://irc-ws.chat.twitch.tv/"
+    websocket = await websockets.connect(uri)
+
+    await websocket.send("CAP REQ :twitch.tv/tags twitch.tv/commands")
+
+    if message:
+        await websocket.send(f"PASS oauth:{TWITCH_OAUTH}")
+        await websocket.send(f"NICK {TWITCH_USER}")
+        await websocket.send(f"USER {TWITCH_USER} 8 * :{TWITCH_USER}")
+        await websocket.send(f"JOIN #{channel}")
+        # PRIVMSG #spikevegeta :o
+        await websocket.send(f" PRIVMSG #{channel} :{message}")
+        return
+
+    await websocket.send("PASS SCHMOOPIIE")
+    await websocket.send("NICK justinfan79668")
+    await websocket.send("USER justinfan79668 8 * :justinfan79668")
+    await websocket.send(f"JOIN #{channel}")
+
+    while True:
+        message = await websocket.recv()
+        if 'PING' in message:
+            await websocket.send("PONG")
+            continue
+        #print(message)
+        text = message.split("PRIVMSG")[1].split(":", 1)[1] if "PRIVMSG" in message else ""
+        parsed = urllib.parse.parse_qs(message)
+        username = parsed.get("display-name")
+        if username and text:
+            color = parsed.get('color', [7])[0]
+            if color:
+                set_color(color)
+                color = colors.index(color) + 20
+            if 'ACTION' in text:
+                text = text.split('ACTION')[1]
+                print(f"\033[38;5;{color}m{username[0]} {text.strip()}\033[m")
+            else:
+                print(f"\033[38;5;{color}m{username[0]}\033[m: {text.strip()}")
+        elif "USERNOTICE" in message:
+            continue
+        else:
+            print(message.strip())
+
+asyncio.get_event_loop().run_until_complete(chat())
