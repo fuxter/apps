@@ -85,10 +85,14 @@ for item in [item for item in items[:max_items] if 'gridVideoRenderer' in item]:
     item = item['gridVideoRenderer']
     #print(json.dumps(item))
     #sys.exit()
+    if 'simpleText' in item['title']:
+        title = item['title']['simpleText']
+    else:
+        title = item['title']['runs'][0]['text']
     print(
         item['shortBylineText']['runs'][0]['text'].rjust(l) if 'shortBylineText' in item else '',
         f"ytdl://{item['videoId']}",
-        item['title']['simpleText'],
+        title,
         f"[{item['thumbnailOverlays'][0]['thumbnailOverlayTimeStatusRenderer']['text']['simpleText']}]" if 'thumbnailOverlayTimeStatusRenderer' in item['thumbnailOverlays'][0] else f"[{item['thumbnailOverlays'][-1]['thumbnailOverlayNowPlayingRenderer']['text']['runs'][0]['text']}]"
     )
 
