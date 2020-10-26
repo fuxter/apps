@@ -70,7 +70,7 @@ class App:
 
     def load_history(self):
         self.watched.extend(open(WATCHED, "rb").read().split())
-        self.flagged.extend(open(FLAGGED, "rb").read().split()[:100])
+        self.flagged.extend(open(FLAGGED, "rb").read().split())
 
     def save_history(self):
         with open(WATCHED, "wb") as f:
