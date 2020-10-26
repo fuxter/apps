@@ -188,12 +188,12 @@ class App:
         self.refresh()
         if quality:
             args.insert(2, quality)
-        subprocess.run(args)
+        process = subprocess.run(args)
         self.mpvs.remove(key)
-        if b"ytdl" in key and not self.show_watched_items:
+        if process.returncode == 0 and b"ytdl" in key and not self.show_watched_items:
             if key == self.active:
                 self.previous()
-        if b"ytdl" in key and key not in self.watched:
+        if process.returncode == 0 and b"ytdl" in key and key not in self.watched:
             self.watched.appendleft(key)
         self.refresh()
 
