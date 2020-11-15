@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 
 
 load_dotenv()
+print("\033[?25l")
 TWITCH_USER = os.getenv("TWITCH_USER")
 TWITCH_OAUTH = os.getenv("TWITCH_OAUTH")
 
@@ -66,12 +67,12 @@ async def chat():
                 color = colors.index(color) + 20
             if 'ACTION' in text:
                 text = text.split('ACTION')[1]
-                print(f"\033[38;5;{color}m{username[0]} {text.strip()}\033[m")
+                print(f"\n\033[38;5;{color}m{username[0]} {text.strip()}\033[m", end="")
             else:
-                print(f"\033[38;5;{color}m{username[0]}\033[m: {text.strip()}")
+                print(f"\n\033[38;5;{color}m{username[0]}\033[m: {text.strip()}", end="")
         elif "USERNOTICE" in message:
             continue
         else:
-            print(message.strip())
+            print("\n", message.strip(), end="")
 
 asyncio.get_event_loop().run_until_complete(chat())
