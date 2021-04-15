@@ -224,7 +224,7 @@ class App:
             elif key == 52:
                 _thread.start_new_thread(self.play, ("--ytdl-format=480p",))
             elif key == 108:
-                _thread.start_new_thread(self.play, ("--ytdl-format=22,720p60,720p",))
+                _thread.start_new_thread(self.play, ("--ytdl-format=22/720p60/720p",))
             elif key == 104:
                 self.show_watched_items = not self.show_watched_items
                 self.filter_lines()
