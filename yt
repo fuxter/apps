@@ -75,9 +75,15 @@ items = []
 for line in r.content.decode().split('\n'):
     #print(line)
     if line.count('ytInitialData'):
-        content = json.loads(line.split('=', maxsplit=1)[1][:-1].strip())
+        #data = line.split('=', maxsplit=1)[1][:-1].strip()
+        data = line.split('ytInitialData')[1][3:]
+        data = data.split('</script>')[0][:-1]
+        content = json.loads(data)
         items += content_items(content)
         break
+
+if not items:
+    print("login, maybe")
 
 l = max([len(item['gridVideoRenderer']['shortBylineText']['runs'][0]['text']) for item in items[:max_items] if 'gridVideoRenderer' in item and 'shortBylineText' in item['gridVideoRenderer']] or [0])
 
@@ -85,15 +91,22 @@ for item in [item for item in items[:max_items] if 'gridVideoRenderer' in item]:
     item = item['gridVideoRenderer']
     #print(json.dumps(item))
     #sys.exit()
+
     if 'simpleText' in item['title']:
         title = item['title']['simpleText']
     else:
         title = item['title']['runs'][0]['text']
+
+    try:
+        duration = f"[{item['thumbnailOverlays'][0]['thumbnailOverlayTimeStatusRenderer']['text']['simpleText']}]"
+    except KeyError:
+        duration = f"[{item['thumbnailOverlays'][-1]['thumbnailOverlayNowPlayingRenderer']['text']['runs'][0]['text']}]"
+
     print(
         item['shortBylineText']['runs'][0]['text'].rjust(l) if 'shortBylineText' in item else '',
         f"ytdl://{item['videoId']}",
         title,
-        f"[{item['thumbnailOverlays'][0]['thumbnailOverlayTimeStatusRenderer']['text']['simpleText']}]" if 'thumbnailOverlayTimeStatusRenderer' in item['thumbnailOverlays'][0] else f"[{item['thumbnailOverlays'][-1]['thumbnailOverlayNowPlayingRenderer']['text']['runs'][0]['text']}]"
+        duration,
     )
 
-pickle.dump(s.cookies, open(cookie_file, 'wb'))
+#pickle.dump(s.cookies, open(cookie_file, 'wb'))
