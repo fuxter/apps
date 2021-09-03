@@ -129,6 +129,8 @@ class App:
             else:
                 nudge = nudge.replace("1", " ")
             self.screen.addstr(index, 0, nudge, mode)
+            # curses.COLS
+            #line = line.replace(b"https://www.twitch.tv/", b"tw://")
             self.screen.addstr(line, mode)
             #self.screen.addstr(line[:self.screen.getmaxyx()[1] - 3], mode)
         #if not self.fetch_thread.is_alive():
@@ -163,17 +165,23 @@ class App:
             self.filter_lines()
 
     def next_page(self):
+        self.fetch_timer.cancel()
         self.page = next(self.pages)
         self.get_lines()
 
     def prev_page(self):
+        self.fetch_timer.cancel()
         self.page = prev(self.pages)
         self.get_lines()
 
     def fetch(self):
+        self.get_lines()
+        self.refresh()
+
+    def fetch_scheduler(self):
         while True:
-            self.get_lines()
-            self.refresh()
+            self.fetch_timer = threading.Timer(60, self.fetch)
+            self.fetch_timer.start()
             time.sleep(60)
 
     def history_thread(self):
@@ -202,8 +210,8 @@ class App:
         curses.curs_set(False)
         self.load_history()
         self.screen = screen
-        self.fetch_thread = threading.Thread(target=self.fetch, daemon=True)
-        self.fetch_thread.start()
+        self.fetch()
+        threading.Thread(target=self.fetch_scheduler, daemon=True).start()
         self.refresh()
         _thread.start_new_thread(self.history_thread, ())
         while True:
